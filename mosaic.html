@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>画像モザイクツール</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anthropic+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600;1,700;1,800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f0f0f;
+      --surface:   #191919;
+      --surface2:  #222222;
+      --border:    #2e2e2e;
+      --accent:    #DA622B;
+      --accent-dim:#b8511f;
+      --text:      #e0ddd8;
+      --text-muted:#6b6860;
+      --text-sub:  #9b9790;
+      --danger:    #c0392b;
+    }
+
+    body {
+      font-family: 'Anthropic Sans', system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 11px 20px;
+      font-size: 23px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text);
+    }
+    header::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ---- Sidebar ---- */
+    #sidebar {
+      width: 280px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.8px;
+      margin-bottom: 8px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      font-size: 20px;
+      font-family: 'Anthropic Sans', system-ui, sans-serif;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s, opacity 0.12s;
+      font-weight: 500;
+    }
+    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .btn-primary:not(:disabled):hover {
+      background: var(--accent-dim);
+      border-color: var(--accent-dim);
+    }
+
+    .btn-success {
+      background: transparent;
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .btn-success:not(:disabled):hover {
+      background: rgba(212,130,42,0.12);
+    }
+
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text-sub);
+      border-color: var(--border);
+    }
+    .btn-secondary:not(:disabled):hover {
+      background: #2a2a2a;
+      color: var(--text);
+    }
+
+    .slider-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 17px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    #block-size-label { font-weight: 700; color: var(--accent); font-size: 12px; }
+    input[type=range] {
+      width: 100%;
+      accent-color: var(--accent);
+      background: transparent;
+    }
+
+    #region-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .region-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 5px 8px;
+      font-size: 18px;
+      font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    }
+    .region-no { font-weight: 700; color: var(--accent); margin-right: 5px; }
+    .region-del {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 18px;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    .region-del:hover { color: var(--danger); }
+    #no-regions { font-size: 12px; color: var(--text-muted); text-align: center; padding: 8px 0; }
+
+    .bottom-btns { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+
+    /* ---- Canvas Area ---- */
+    #canvas-area {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+      padding: 20px;
+      background: var(--bg);
+    }
+
+    #drop-hint {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 21px;
+      line-height: 2;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      padding: 60px 50px;
+      pointer-events: none;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    #drop-hint small { font-size: 11px; color: var(--text-muted); }
+    #canvas-area.drag-over #drop-hint {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(212,130,42,0.06);
+    }
+
+    #canvas-container {
+      position: relative;
+      display: none;
+      box-shadow: 0 0 0 1px var(--border), 0 8px 32px rgba(0,0,0,0.5);
+      border-radius: 2px;
+      line-height: 0;
+    }
+
+    #canvas {
+      display: block;
+      max-width: calc(100vw - 320px);
+      max-height: calc(100vh - 80px);
+    }
+
+    #overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      cursor: crosshair;
+    }
+  </style>
+</head>
+<body>
+
+<header>画像モザイクツール</header>
+
+<main>
+  <div id="sidebar">
+
+    <div>
+      <div class="section-title">画像</div>
+      <input type="file" id="file-input" accept="image/*" style="display:none">
+      <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">画像を開く</button>
+    </div>
+
+    <div>
+      <div class="section-title">粒度（ブロックサイズ）</div>
+      <div class="slider-row">
+        <span>細</span>
+        <span id="block-size-label">15 px</span>
+        <span>粗</span>
+      </div>
+      <input type="range" id="block-size" min="5" max="80" step="1" value="15">
+    </div>
+
+    <div style="flex:1; min-height:0; display:flex; flex-direction:column;">
+      <div class="section-title">選択範囲 <span id="region-count"></span></div>
+      <div id="region-list">
+        <div id="no-regions">なし（画像上でドラッグ）</div>
+      </div>
+    </div>
+
+    <div class="bottom-btns">
+      <button class="btn btn-secondary" id="btn-reset"  onclick="resetSelections()" disabled>選択をリセット</button>
+      <button class="btn btn-success"   id="btn-apply"  onclick="applyMosaic()"    disabled>モザイク適用</button>
+      <button class="btn btn-primary"   id="btn-save"   onclick="saveImage()"      disabled>保存 (PNG)</button>
+    </div>
+
+  </div>
+
+  <div id="canvas-area">
+    <div id="drop-hint">
+      画像をここにドロップ<br>
+      または「画像を開く」をクリック<br><br>
+      <small>JPG / PNG / WebP / GIF 対応</small>
+    </div>
+    <div id="canvas-container">
+      <canvas id="canvas"></canvas>
+      <canvas id="overlay"></canvas>
+    </div>
+  </div>
+</main>
+
+<script>
+  const fileInput      = document.getElementById('file-input');
+  const canvas         = document.getElementById('canvas');
+  const overlay        = document.getElementById('overlay');
+  const ctx            = canvas.getContext('2d');
+  const ovCtx          = overlay.getContext('2d');
+  const canvasContainer= document.getElementById('canvas-container');
+  const canvasArea     = document.getElementById('canvas-area');
+  const blockSizeSlider= document.getElementById('block-size');
+  const blockSizeLabel = document.getElementById('block-size-label');
+  const regionListEl   = document.getElementById('region-list');
+  const regionCount    = document.getElementById('region-count');
+  const btnReset       = document.getElementById('btn-reset');
+  const btnApply       = document.getElementById('btn-apply');
+  const btnSave        = document.getElementById('btn-save');
+
+  let img        = null;
+  let regions    = [];   // { x, y, w, h } in canvas-pixel coords
+  let isDrawing  = false;
+  let startX     = 0;
+  let startY     = 0;
+
+  // ---- Slider ----
+  blockSizeSlider.addEventListener('input', () => {
+    blockSizeLabel.textContent = blockSizeSlider.value + ' px';
+  });
+
+  // ---- File input ----
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files[0]) loadImage(e.target.files[0]);
+    e.target.value = '';
+  });
+
+  // ---- Drag & Drop ----
+  canvasArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    canvasArea.classList.add('drag-over');
+  });
+  canvasArea.addEventListener('dragleave', (e) => {
+    if (!canvasArea.contains(e.relatedTarget)) {
+      canvasArea.classList.remove('drag-over');
+    }
+  });
+  canvasArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    canvasArea.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) loadImage(file);
+  });
+
+  // ---- Load image ----
+  function loadImage(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const newImg = new Image();
+      newImg.onload = () => {
+        img = newImg;
+        canvas.width  = img.width;
+        canvas.height = img.height;
+        overlay.width  = img.width;
+        overlay.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        regions = [];
+        updateRegionList();
+        ovCtx.clearRect(0, 0, overlay.width, overlay.height);
+        document.getElementById('drop-hint').style.display = 'none';
+        canvasContainer.style.display = 'block';
+        btnSave.disabled = false;
+      };
+      newImg.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ---- Canvas coordinate helpers ----
+  function getCanvasPos(e) {
+    const rect   = overlay.getBoundingClientRect();
+    const scaleX = overlay.width  / rect.width;
+    const scaleY = overlay.height / rect.height;
+    return {
+      x: Math.max(0, Math.min(overlay.width,  Math.round((e.clientX - rect.left) * scaleX))),
+      y: Math.max(0, Math.min(overlay.height, Math.round((e.clientY - rect.top)  * scaleY))),
+    };
+  }
+
+  // ---- Mouse selection ----
+  function onDragMove(e) {
+    const pos = getCanvasPos(e);
+    redrawOverlay(startX, startY, pos.x, pos.y);
+  }
+
+  function onDragEnd(e) {
+    isDrawing = false;
+    document.removeEventListener('mousemove', onDragMove);
+    document.removeEventListener('mouseup', onDragEnd);
+    const pos = getCanvasPos(e);
+    const x = Math.min(startX, pos.x);
+    const y = Math.min(startY, pos.y);
+    const w = Math.abs(pos.x - startX);
+    const h = Math.abs(pos.y - startY);
+    if (w > 4 && h > 4) {
+      regions.push({ x, y, w, h });
+      updateRegionList();
+    }
+    redrawOverlay();
+  }
+
+  overlay.addEventListener('mousedown', (e) => {
+    if (!img) return;
+    const pos = getCanvasPos(e);
+    isDrawing = true;
+    startX = pos.x;
+    startY = pos.y;
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('mouseup', onDragEnd);
+  });
+
+  // ---- Draw selection overlay ----
+  function redrawOverlay(dragX1, dragY1, dragX2, dragY2) {
+    ovCtx.clearRect(0, 0, overlay.width, overlay.height);
+
+    const labelSize = Math.max(14, Math.min(20, overlay.width / 80));
+
+    // Confirmed regions
+    regions.forEach((r, i) => {
+      ovCtx.setLineDash([6, 3]);
+      ovCtx.lineWidth = 2;
+      ovCtx.strokeStyle = '#e74c3c';
+      ovCtx.fillStyle = 'rgba(231,76,60,0.08)';
+      ovCtx.strokeRect(r.x, r.y, r.w, r.h);
+      ovCtx.fillRect(r.x, r.y, r.w, r.h);
+
+      // Label badge
+      ovCtx.setLineDash([]);
+      const label = `#${i + 1}`;
+      ovCtx.font = `bold ${labelSize}px sans-serif`;
+      const tw = ovCtx.measureText(label).width;
+      const bx = r.x + 2, by = r.y + 2;
+      ovCtx.fillStyle = '#e74c3c';
+      ovCtx.fillRect(bx, by, tw + 8, labelSize + 6);
+      ovCtx.fillStyle = 'white';
+      ovCtx.fillText(label, bx + 4, by + labelSize + 1);
+    });
+
+    // Current drag rectangle
+    if (dragX1 !== undefined) {
+      const x = Math.min(dragX1, dragX2);
+      const y = Math.min(dragY1, dragY2);
+      const w = Math.abs(dragX2 - dragX1);
+      const h = Math.abs(dragY2 - dragY1);
+      ovCtx.setLineDash([6, 3]);
+      ovCtx.lineWidth = 2;
+      ovCtx.strokeStyle = '#3498db';
+      ovCtx.fillStyle = 'rgba(52,152,219,0.1)';
+      ovCtx.strokeRect(x, y, w, h);
+      ovCtx.fillRect(x, y, w, h);
+    }
+  }
+
+  // ---- Region list UI ----
+  function updateRegionList() {
+    const has = regions.length > 0;
+    btnReset.disabled = !has;
+    btnApply.disabled = !has || !img;
+    regionCount.textContent = has ? `(${regions.length})` : '';
+
+    if (!has) {
+      regionListEl.innerHTML = '<div id="no-regions">なし（画像上でドラッグ）</div>';
+      return;
+    }
+    regionListEl.innerHTML = regions.map((r, i) => `
+      <div class="region-item">
+        <span><span class="region-no">#${i + 1}</span>${r.w}×${r.h}</span>
+        <button class="region-del" title="削除" onclick="removeRegion(${i})">✕</button>
+      </div>
+    `).join('');
+  }
+
+  function removeRegion(index) {
+    regions.splice(index, 1);
+    updateRegionList();
+    if (img) ctx.drawImage(img, 0, 0);
+    redrawOverlay();
+  }
+
+  function resetSelections() {
+    regions = [];
+    updateRegionList();
+    if (img) ctx.drawImage(img, 0, 0);
+    redrawOverlay();
+  }
+
+  // ---- Mosaic ----
+  function applyMosaic() {
+    if (!img || regions.length === 0) return;
+    const blockSize = parseInt(blockSizeSlider.value);
+
+    ctx.drawImage(img, 0, 0);
+
+    for (const r of regions) {
+      const imageData = ctx.getImageData(r.x, r.y, r.w, r.h);
+      const data = imageData.data;
+
+      for (let by = 0; by < r.h; by += blockSize) {
+        for (let bx = 0; bx < r.w; bx += blockSize) {
+          const bw = Math.min(blockSize, r.w - bx);
+          const bh = Math.min(blockSize, r.h - by);
+          let rS = 0, gS = 0, bS = 0, aS = 0, n = 0;
+
+          for (let py = by; py < by + bh; py++) {
+            for (let px = bx; px < bx + bw; px++) {
+              const idx = (py * r.w + px) * 4;
+              rS += data[idx];
+              gS += data[idx + 1];
+              bS += data[idx + 2];
+              aS += data[idx + 3];
+              n++;
+            }
+          }
+
+          const aR = (rS / n) | 0;
+          const aG = (gS / n) | 0;
+          const aB = (bS / n) | 0;
+          const aA = (aS / n) | 0;
+
+          for (let py = by; py < by + bh; py++) {
+            for (let px = bx; px < bx + bw; px++) {
+              const idx = (py * r.w + px) * 4;
+              data[idx]     = aR;
+              data[idx + 1] = aG;
+              data[idx + 2] = aB;
+              data[idx + 3] = aA;
+            }
+          }
+        }
+      }
+
+      ctx.putImageData(imageData, r.x, r.y);
+    }
+
+    redrawOverlay();
+  }
+
+  // ---- Save ----
+  function saveImage() {
+    const a = document.createElement('a');
+    a.download = 'mosaic.png';
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  }
+</script>
+</body>
+</html>
