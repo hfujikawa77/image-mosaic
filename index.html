@@ -173,6 +173,10 @@
 
     .bottom-btns { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
 
+    .shape-btns { display: flex; gap: 8px; }
+    .shape-btns .btn { font-size: 14px; padding: 6px 10px; }
+    .btn-shape-active { background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; }
+
     /* ---- Canvas Area ---- */
     #canvas-area {
       flex: 1;
@@ -247,6 +251,14 @@
       <input type="range" id="block-size" min="5" max="80" step="1" value="15">
     </div>
 
+    <div>
+      <div class="section-title">選択形状</div>
+      <div class="shape-btns">
+        <button class="btn btn-secondary btn-shape-active" id="btn-rect"    onclick="setShape('rect')">□ 四角</button>
+        <button class="btn btn-secondary"                  id="btn-ellipse" onclick="setShape('ellipse')">○ 円形</button>
+      </div>
+    </div>
+
     <div style="flex:1; min-height:0; display:flex; flex-direction:column;">
       <div class="section-title">選択範囲 <span id="region-count"></span></div>
       <div id="region-list">
@@ -292,10 +304,17 @@
   const btnSave        = document.getElementById('btn-save');
 
   let img        = null;
-  let regions    = [];   // { x, y, w, h } in canvas-pixel coords
+  let regions    = [];   // { x, y, w, h, shape } in canvas-pixel coords
   let isDrawing  = false;
   let startX     = 0;
   let startY     = 0;
+  let shapeMode  = 'rect';
+
+  function setShape(mode) {
+    shapeMode = mode;
+    document.getElementById('btn-rect').classList.toggle('btn-shape-active', mode === 'rect');
+    document.getElementById('btn-ellipse').classList.toggle('btn-shape-active', mode === 'ellipse');
+  }
 
   // ---- Slider ----
   blockSizeSlider.addEventListener('input', () => {
@@ -376,7 +395,7 @@
     const w = Math.abs(pos.x - startX);
     const h = Math.abs(pos.y - startY);
     if (w > 4 && h > 4) {
-      regions.push({ x, y, w, h });
+      regions.push({ x, y, w, h, shape: shapeMode });
       updateRegionList();
     }
     redrawOverlay();
@@ -404,8 +423,14 @@
       ovCtx.lineWidth = 2;
       ovCtx.strokeStyle = '#e74c3c';
       ovCtx.fillStyle = 'rgba(231,76,60,0.08)';
-      ovCtx.strokeRect(r.x, r.y, r.w, r.h);
-      ovCtx.fillRect(r.x, r.y, r.w, r.h);
+      if (r.shape === 'ellipse') {
+        ovCtx.beginPath();
+        ovCtx.ellipse(r.x + r.w/2, r.y + r.h/2, r.w/2, r.h/2, 0, 0, Math.PI*2);
+        ovCtx.stroke(); ovCtx.fill();
+      } else {
+        ovCtx.strokeRect(r.x, r.y, r.w, r.h);
+        ovCtx.fillRect(r.x, r.y, r.w, r.h);
+      }
 
       // Label badge
       ovCtx.setLineDash([]);
@@ -419,7 +444,7 @@
       ovCtx.fillText(label, bx + 4, by + labelSize + 1);
     });
 
-    // Current drag rectangle
+    // Current drag shape
     if (dragX1 !== undefined) {
       const x = Math.min(dragX1, dragX2);
       const y = Math.min(dragY1, dragY2);
@@ -429,8 +454,14 @@
       ovCtx.lineWidth = 2;
       ovCtx.strokeStyle = '#3498db';
       ovCtx.fillStyle = 'rgba(52,152,219,0.1)';
-      ovCtx.strokeRect(x, y, w, h);
-      ovCtx.fillRect(x, y, w, h);
+      if (shapeMode === 'ellipse') {
+        ovCtx.beginPath();
+        ovCtx.ellipse(x + w/2, y + h/2, w/2, h/2, 0, 0, Math.PI*2);
+        ovCtx.stroke(); ovCtx.fill();
+      } else {
+        ovCtx.strokeRect(x, y, w, h);
+        ovCtx.fillRect(x, y, w, h);
+      }
     }
   }
 
@@ -447,7 +478,7 @@
     }
     regionListEl.innerHTML = regions.map((r, i) => `
       <div class="region-item">
-        <span><span class="region-no">#${i + 1}</span>${r.w}×${r.h}</span>
+        <span><span class="region-no">#${i + 1}</span>${r.shape === 'ellipse' ? '○' : '□'} ${r.w}×${r.h}</span>
         <button class="region-del" title="削除" onclick="removeRegion(${i})">✕</button>
       </div>
     `).join('');
@@ -477,6 +508,8 @@
     for (const r of regions) {
       const imageData = ctx.getImageData(r.x, r.y, r.w, r.h);
       const data = imageData.data;
+      const isEllipse = r.shape === 'ellipse';
+      const cx = r.w / 2, cy = r.h / 2;
 
       for (let by = 0; by < r.h; by += blockSize) {
         for (let bx = 0; bx < r.w; bx += blockSize) {
@@ -486,27 +519,27 @@
 
           for (let py = by; py < by + bh; py++) {
             for (let px = bx; px < bx + bw; px++) {
+              if (isEllipse) {
+                const dx = (px - cx) / cx, dy = (py - cy) / cy;
+                if (dx*dx + dy*dy > 1) continue;
+              }
               const idx = (py * r.w + px) * 4;
-              rS += data[idx];
-              gS += data[idx + 1];
-              bS += data[idx + 2];
-              aS += data[idx + 3];
+              rS += data[idx]; gS += data[idx+1]; bS += data[idx+2]; aS += data[idx+3];
               n++;
             }
           }
 
-          const aR = (rS / n) | 0;
-          const aG = (gS / n) | 0;
-          const aB = (bS / n) | 0;
-          const aA = (aS / n) | 0;
+          if (n === 0) continue;
+          const aR = (rS/n)|0, aG = (gS/n)|0, aB = (bS/n)|0, aA = (aS/n)|0;
 
           for (let py = by; py < by + bh; py++) {
             for (let px = bx; px < bx + bw; px++) {
+              if (isEllipse) {
+                const dx = (px - cx) / cx, dy = (py - cy) / cy;
+                if (dx*dx + dy*dy > 1) continue;
+              }
               const idx = (py * r.w + px) * 4;
-              data[idx]     = aR;
-              data[idx + 1] = aG;
-              data[idx + 2] = aB;
-              data[idx + 3] = aA;
+              data[idx] = aR; data[idx+1] = aG; data[idx+2] = aB; data[idx+3] = aA;
             }
           }
         }
@@ -523,7 +556,7 @@
     if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       if (!img) return;
-      regions.push({ x: 0, y: 0, w: canvas.width, h: canvas.height });
+      regions.push({ x: 0, y: 0, w: canvas.width, h: canvas.height, shape: shapeMode });
       updateRegionList();
       redrawOverlay();
     }
