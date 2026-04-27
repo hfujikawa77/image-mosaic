@@ -309,6 +309,7 @@
   let startX     = 0;
   let startY     = 0;
   let shapeMode  = 'rect';
+  let moveState  = null; // { regionIndex, startX, startY, origX, origY }
 
   function setShape(mode) {
     shapeMode = mode;
@@ -401,14 +402,58 @@
     redrawOverlay();
   }
 
+  function hitRegionIndex(x, y) {
+    for (let i = regions.length - 1; i >= 0; i--) {
+      const r = regions[i];
+      if (r.shape === 'ellipse') {
+        const dx = (x - (r.x + r.w/2)) / (r.w/2);
+        const dy = (y - (r.y + r.h/2)) / (r.h/2);
+        if (dx*dx + dy*dy <= 1) return i;
+      } else {
+        if (x >= r.x && x <= r.x+r.w && y >= r.y && y <= r.y+r.h) return i;
+      }
+    }
+    return -1;
+  }
+
+  function onMoveMove(e) {
+    const pos = getCanvasPos(e);
+    const r = regions[moveState.regionIndex];
+    r.x = Math.max(0, Math.min(canvas.width  - r.w, moveState.origX + (pos.x - moveState.startX)));
+    r.y = Math.max(0, Math.min(canvas.height - r.h, moveState.origY + (pos.y - moveState.startY)));
+    redrawOverlay();
+  }
+
+  function onMoveEnd() {
+    moveState = null;
+    overlay.style.cursor = 'crosshair';
+    document.removeEventListener('mousemove', onMoveMove);
+    document.removeEventListener('mouseup', onMoveEnd);
+  }
+
+  overlay.addEventListener('mousemove', (e) => {
+    if (!img || isDrawing || moveState) return;
+    const pos = getCanvasPos(e);
+    overlay.style.cursor = hitRegionIndex(pos.x, pos.y) >= 0 ? 'move' : 'crosshair';
+  });
+
   overlay.addEventListener('mousedown', (e) => {
     if (!img) return;
     const pos = getCanvasPos(e);
-    isDrawing = true;
-    startX = pos.x;
-    startY = pos.y;
-    document.addEventListener('mousemove', onDragMove);
-    document.addEventListener('mouseup', onDragEnd);
+    const hitIdx = hitRegionIndex(pos.x, pos.y);
+    if (hitIdx >= 0) {
+      const r = regions[hitIdx];
+      moveState = { regionIndex: hitIdx, startX: pos.x, startY: pos.y, origX: r.x, origY: r.y };
+      overlay.style.cursor = 'move';
+      document.addEventListener('mousemove', onMoveMove);
+      document.addEventListener('mouseup', onMoveEnd);
+    } else {
+      isDrawing = true;
+      startX = pos.x;
+      startY = pos.y;
+      document.addEventListener('mousemove', onDragMove);
+      document.addEventListener('mouseup', onDragEnd);
+    }
   });
 
   // ---- Draw selection overlay ----
