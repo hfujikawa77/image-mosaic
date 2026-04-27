@@ -517,6 +517,17 @@
     redrawOverlay();
   }
 
+  // ---- Keyboard shortcuts ----
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      if (!img) return;
+      regions.push({ x: 0, y: 0, w: canvas.width, h: canvas.height });
+      updateRegionList();
+      redrawOverlay();
+    }
+  });
+
   // ---- Save ----
   function saveImage() {
     const a = document.createElement('a');
