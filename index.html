@@ -277,7 +277,8 @@
   <div id="canvas-area">
     <div id="drop-hint">
       画像をここにドロップ<br>
-      または「画像を開く」をクリック<br><br>
+      または「画像を開く」をクリック<br>
+      または <kbd style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:13px;">Ctrl+V</kbd> で貼りつけ<br><br>
       <small>JPG / PNG / WebP / GIF 対応</small>
     </div>
     <div id="canvas-container">
@@ -326,6 +327,19 @@
   fileInput.addEventListener('change', (e) => {
     if (e.target.files[0]) loadImage(e.target.files[0]);
     e.target.value = '';
+  });
+
+  // ---- Clipboard paste (Ctrl+V) ----
+  document.addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const blob = item.getAsFile();
+        if (blob) { e.preventDefault(); loadImage(blob); }
+        break;
+      }
+    }
   });
 
   // ---- Drag & Drop ----
